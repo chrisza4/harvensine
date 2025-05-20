@@ -2,6 +2,7 @@ use std::path::Path;
 
 mod calc;
 mod generator;
+mod json;
 
 fn main() {
     let p = Path::new("output/output");

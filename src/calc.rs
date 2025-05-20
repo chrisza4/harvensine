@@ -1,5 +1,5 @@
 fn radion_from_degree(degree: f64) -> f64 {
-  0.01745329251994329577f64 * degree
+  0.017_453_292_519_943_295_f64 * degree
 }
 
 fn square(x: f64) -> f64 {

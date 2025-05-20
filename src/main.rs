@@ -21,7 +21,7 @@ fn untyped_example() -> Result<()> {
     let data = r#"
         {
             "name": "\u000AJohn Doe",
-            "age": 43,
+            "age": 43e3,
             "phones": [
                 "+44 1234567",
                 "+44 2345678"
@@ -33,6 +33,7 @@ fn untyped_example() -> Result<()> {
 
     // Access parts of the data by indexing with square brackets.
     println!("Please call {} at the number {}", v["name"], v["phones"][0]);
+    println!("Age {}", v["age"]);
 
     Ok(())
 }

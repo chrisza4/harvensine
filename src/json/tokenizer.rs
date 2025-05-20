@@ -39,11 +39,22 @@ fn is_char_in_number(c: &char) -> bool {
     c.is_ascii_digit() || *c == '.' || *c == 'E' || *c == 'e'
 }
 
-pub fn tokenized<R>(reader: &mut R) -> Result<JsonValue, TokenizedError>
+macro_rules! tokenized {
+    ($a: expr, $b: expr) => {
+        tokenized($a, $b)
+    };
+    ($a: expr) => {
+        tokenized($a, None)
+    };
+}
+pub fn tokenized<R>(reader: &mut R, last_char: Option<char>) -> Result<JsonValue, TokenizedError>
 where
     R: BufRead,
 {
-    let mut char = read_one_char(reader)?;
+    let mut char = match last_char {
+        Some(c) => c,
+        None => read_one_char(reader)?
+    };
 
     loop {
         if char != ' ' {
@@ -117,14 +128,14 @@ where
         '[' => {
             let mut result: Vec<JsonValue> = Vec::new();
             loop {
-                let value = tokenized(reader);
+                let value = tokenized!(reader);
                 let Ok(next_token) = value else {
                     break;
                 };
+                println!("Token: {:?}", next_token);
                 result.push(next_token);
             }
-            Err(TokenizedError::Invalid)
-            // Ok(JsonValue::Array(result))
+            Ok(JsonValue::Array(result))
         }
         _ => Err(TokenizedError::Invalid),
     }
@@ -188,7 +199,7 @@ mod tests {
         let input = "null";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::NullValue), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::NullValue), tokenized!(&mut reader));
     }
 
     #[test]
@@ -196,7 +207,7 @@ mod tests {
         let input = "   null";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::NullValue), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::NullValue), tokenized!(&mut reader));
     }
 
     #[test]
@@ -204,7 +215,7 @@ mod tests {
         let input = "true";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::TrueValue), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::TrueValue), tokenized!(&mut reader));
     }
 
     #[test]
@@ -212,20 +223,21 @@ mod tests {
         let input = "false";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::FalseValue), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::FalseValue), tokenized!(&mut reader));
     }
 
     #[test]
     pub fn test_tokenized_array() {
-        let input = "[1, 2, \"haha\", true]";
+        let input = "[1, 2, \"haha\", \"hoho\", true]";
         let mut reader = buf_reader_from_str(input);
 
         assert_eq!(Ok(JsonValue::Array(vec![
             JsonValue::Number(1.0),
             JsonValue::Number(2.0),
             JsonValue::String(String::from("haha")),
+            JsonValue::String(String::from("hoho")),
             JsonValue::TrueValue
-        ])), tokenized(&mut reader));
+        ])), tokenized!(&mut reader));
     }
 
     #[test]
@@ -233,7 +245,7 @@ mod tests {
         let input = "nxll";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Err(TokenizedError::Invalid), tokenized(&mut reader));
+        assert_eq!(Err(TokenizedError::Invalid), tokenized!(&mut reader));
     }
 
     #[test]
@@ -243,7 +255,7 @@ mod tests {
 
         assert_eq!(
             Ok(JsonValue::String(String::from("hello world"))),
-            tokenized(&mut reader)
+            tokenized!(&mut reader)
         );
     }
 
@@ -252,7 +264,7 @@ mod tests {
         let input = "123451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(123451.0)), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::Number(123451.0)), tokenized!(&mut reader));
     }
 
     #[test]
@@ -260,7 +272,7 @@ mod tests {
         let input = "123.451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(123.451)), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::Number(123.451)), tokenized!(&mut reader));
     }
 
     #[rstest]
@@ -269,7 +281,7 @@ mod tests {
     pub fn test_tokenized_number_exponent(#[case] input: &str, #[case] expected: f64) {
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(expected)), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::Number(expected)), tokenized!(&mut reader));
     }
 
     #[test]
@@ -277,7 +289,7 @@ mod tests {
         let input = "-123.451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(-123.451)), tokenized(&mut reader));
+        assert_eq!(Ok(JsonValue::Number(-123.451)), tokenized!(&mut reader));
     }
 
     #[test]

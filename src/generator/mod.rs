@@ -1,4 +1,8 @@
-use std::{fs::File, io::{Read, Write}, path::Path};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::Path,
+};
 
 use crate::calc::haversine;
 use rand::{Rng, SeedableRng};
@@ -21,14 +25,14 @@ pub fn generate(path: &Path, count: u32) -> Result<f64, std::io::Error> {
     // Generate 64 points
     let mut randomizer = rand::rngs::SmallRng::from_entropy();
     let mut file = File::create(path).unwrap();
-    
+
     let cluster_centered: [Pair; 64] = std::array::from_fn(|_| Pair {
         x0: randomizer.gen_range(-180f64..180f64),
         x1: randomizer.gen_range(-180f64..180f64),
         y0: randomizer.gen_range(-180f64..180f64),
         y1: randomizer.gen_range(-180f64..180f64),
     });
-    
+
     // Generate cluster around 64 points with random length
     // for i in 0..count {
     let pairs: Vec<Pair> = (0..count)

@@ -50,7 +50,7 @@ macro_rules! tokenized {
 }
 
 #[derive(PartialEq, Debug)]
-struct TokenizedResult {
+pub struct TokenizedResult {
     last_char_read: Option<char>,
     result: JsonValue,
 }
@@ -82,6 +82,7 @@ where
     return Ok(char);
 }
 
+#[allow(dead_code)]
 pub fn tokenized<R>(
     reader: &mut R,
     last_char: Option<char>,
@@ -182,29 +183,19 @@ where
                 };
                 println!("Token: {:?}", next_token.result);
                 result.push(next_token.result);
-                
-                let char = match  next_token.last_char_read {
+
+                let char = match next_token.last_char_read {
                     Some(' ') => read_until_not_space(reader),
                     None => read_until_not_space(reader),
-                    Some(c) => Ok(c)
+                    Some(c) => Ok(c),
                 };
-                    
+
                 match char {
                     Ok(',') => continue,
                     Ok(']') => break,
                     Ok(_) => return Err(TokenizedError::Invalid),
                     Err(e) => return Err(e),
                 }
-                // loop {
-                //     println!("C: {:?}", char);
-                //     if char.is_some() && char.unwrap() == ',' {
-                //         break;
-                //     }
-                //     if char.is_some() && char.unwrap() != ' ' {
-                //         return Err(TokenizedError::Invalid);
-                //     }
-                //     char = Some(read_one_char(reader)?);
-                // }
             }
             Ok(TokenizedResult {
                 last_char_read: None,

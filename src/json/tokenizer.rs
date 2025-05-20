@@ -36,6 +36,7 @@ where
     };
     Ok(buffer[0] as char)
 }
+
 pub fn tokenized<R>(mut reader: R) -> Result<JsonValue, TokenizedError>
 where
     R: BufRead,

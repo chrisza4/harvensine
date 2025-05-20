@@ -1,7 +1,10 @@
+use std::path::Path;
 
+mod calc;
 mod generator;
 
 fn main() {
-    println!("Hello, world!");
-    let _ = generator::generate(3);
+    let p = Path::new("output/output");
+    let sum = generator::generate(p, 1000000);
+    println!("Expected sum: {}", sum.unwrap());
 }

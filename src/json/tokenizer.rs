@@ -1,9 +1,9 @@
 use core::str;
-use std::io::BufRead;
+use std::{collections::HashMap, io::BufRead};
 
 #[derive(PartialEq, Debug)]
 pub enum JsonValue {
-    Object,
+    Object(HashMap<String, JsonValue>),
     Array(Vec<JsonValue>),
     String(String),
     Number(f64),
@@ -73,7 +73,7 @@ where
         }
         char = read_one_char(reader)?;
     }
-    return Ok(char);
+    Ok(char)
 }
 
 #[allow(dead_code)]
@@ -84,17 +84,10 @@ pub fn tokenized<R>(
 where
     R: BufRead,
 {
-    let mut char = match last_char {
+    let char = match last_char {
         Some(c) => c,
-        None => read_one_char(reader)?,
+        None => read_until_not_space(reader)?,
     };
-
-    loop {
-        if char != ' ' {
-            break;
-        }
-        char = read_one_char(reader)?;
-    }
 
     match char {
         'n' => {
@@ -179,8 +172,7 @@ where
                 result.push(next_token.result);
 
                 let char = match next_token.last_char_read {
-                    Some(' ') => read_until_not_space(reader),
-                    None => read_until_not_space(reader),
+                    Some(' ') | None => read_until_not_space(reader),
                     Some(c) => Ok(c),
                 };
 
@@ -194,6 +186,49 @@ where
             Ok(TokenizedResult {
                 last_char_read: None,
                 result: JsonValue::Array(result),
+            })
+        }
+        '{' => {
+            let mut result = HashMap::<String, JsonValue>::new();
+            loop {
+                let Ok(next_char) = read_until_not_space(reader) else {
+                    return Err(TokenizedError::Invalid);
+                };
+                if next_char == '}' {
+                    break;
+                }
+                let Ok(value) = tokenized(reader, Some(next_char)) else {
+                    return Err(TokenizedError::Invalid);
+                };
+                match value.result {
+                    JsonValue::String(key) => {
+                        let Ok(char) = read_until_not_space(reader) else {
+                            return Err(TokenizedError::Invalid);
+                        };
+                        if char != ':' {
+                            return Err(TokenizedError::Invalid);
+                        }
+                        let Ok(value) = tokenized!(reader) else {
+                            return Err(TokenizedError::Invalid);
+                        };
+                        result.insert(key, value.result);
+                        let char = match value.last_char_read {
+                            Some(' ') | None => read_until_not_space(reader),
+                            Some(c) => Ok(c),
+                        }?;
+                        if char == '}' {
+                            break;
+                        }
+                        if char != ',' {
+                            return Err(TokenizedError::Invalid);
+                        }
+                    }
+                    _ => return Err(TokenizedError::Invalid),
+                }
+            }
+            Ok(TokenizedResult {
+                last_char_read: None,
+                result: JsonValue::Object(result),
             })
         }
         c => {
@@ -313,6 +348,84 @@ mod tests {
                 JsonValue::String(String::from("hoho")),
                 JsonValue::TrueValue
             ]),
+            tokenized!(&mut reader).unwrap().result
+        );
+    }
+
+    #[test]
+    pub fn test_tokenized_empty_array() {
+        let input = "[ ]";
+        let mut reader = buf_reader_from_str(input);
+
+        assert_eq!(
+            JsonValue::Array(vec![]),
+            tokenized!(&mut reader).unwrap().result
+        );
+    }
+
+    #[test]
+    pub fn test_tokenized_nested_array() {
+        let input = "[1, 2, \"haha\", [\"f\", \"w\", 3], 4]";
+        let mut reader = buf_reader_from_str(input);
+
+        assert_eq!(
+            JsonValue::Array(vec![
+                JsonValue::Number(1.0),
+                JsonValue::Number(2.0),
+                JsonValue::String(String::from("haha")),
+                JsonValue::Array(vec![
+                    JsonValue::String(String::from("f")),
+                    JsonValue::String(String::from("w")),
+                    JsonValue::Number(3.0),
+                ]),
+                JsonValue::Number(4.0),
+            ]),
+            tokenized!(&mut reader).unwrap().result
+        );
+    }
+
+    #[test]
+    pub fn test_tokenized_object() {
+        let input = "{ \"ok\": true, \"message\": \"haha\", \"code\": 333}";
+        let mut reader = buf_reader_from_str(input);
+
+        assert_eq!(
+            JsonValue::Object(HashMap::from([
+                ("ok".to_string(), JsonValue::TrueValue),
+                ("message".to_string(), JsonValue::String("haha".to_string())),
+                ("code".to_string(), JsonValue::Number(333.0))
+            ])),
+            tokenized!(&mut reader).unwrap().result
+        );
+    }
+
+    #[test]
+    pub fn test_tokenized_empty_object() {
+        let input = "{}";
+        let mut reader = buf_reader_from_str(input);
+
+        assert_eq!(
+            JsonValue::Object(HashMap::from([])),
+            tokenized!(&mut reader).unwrap().result
+        );
+    }
+    #[test]
+    pub fn test_tokenized_nested_object() {
+        let input = "{ \"ok\": true, \"message\": \"haha\", \"data\": {\"a\":  \"b\"} }";
+        let mut reader = buf_reader_from_str(input);
+
+        assert_eq!(
+            JsonValue::Object(HashMap::from([
+                ("ok".to_string(), JsonValue::TrueValue),
+                ("message".to_string(), JsonValue::String("haha".to_string())),
+                (
+                    "data".to_string(),
+                    JsonValue::Object(HashMap::from([(
+                        "a".to_string(),
+                        JsonValue::String("b".to_string())
+                    )]))
+                )
+            ])),
             tokenized!(&mut reader).unwrap().result
         );
     }

@@ -14,7 +14,7 @@ pub enum JsonSign {
 pub enum JsonValue {
     Object,
     Array,
-    String,
+    String(String),
     Number,
     TrueValue,
     FalseValue,
@@ -26,7 +26,7 @@ pub enum TokenizedError {
     Invalid,
 }
 
-pub fn tokenized<R>(mut reader: R) -> Result<JsonValue, TokenizedError>
+fn read_one_char<R>(mut reader: R) -> Result<char, TokenizedError>
 where
     R: BufRead,
 {
@@ -34,7 +34,21 @@ where
     let Ok(_) = reader.read(&mut buffer) else {
         return Err(TokenizedError::Invalid);
     };
-    let char = buffer[0] as char;
+    Ok(buffer[0] as char)
+}
+pub fn tokenized<R>(mut reader: R) -> Result<JsonValue, TokenizedError>
+where
+    R: BufRead,
+{
+    let mut char = read_one_char(&mut reader)?;
+
+    loop {
+        if char != ' ' {
+            break;
+        }
+        char = read_one_char(&mut reader)?;
+    }
+
     match char {
         'n' => {
             let mut buf = [0; 3];
@@ -45,7 +59,7 @@ where
                 Ok(str) if str == "ull" => Ok(JsonValue::NullValue),
                 _ => Err(TokenizedError::Invalid),
             }
-        },
+        }
         't' => {
             let mut buf = [0; 3];
             let Ok(_) = reader.read(&mut buf) else {
@@ -55,7 +69,7 @@ where
                 Ok(str) if str == "rue" => Ok(JsonValue::TrueValue),
                 _ => Err(TokenizedError::Invalid),
             }
-        },
+        }
         'f' => {
             let mut buf = [0; 4];
             let Ok(_) = reader.read(&mut buf) else {
@@ -65,7 +79,7 @@ where
                 Ok(str) if str == "alse" => Ok(JsonValue::FalseValue),
                 _ => Err(TokenizedError::Invalid),
             }
-        },
+        }
         _ => Err(TokenizedError::Invalid),
     }
 }
@@ -90,12 +104,20 @@ mod tests {
     }
 
     #[test]
+    pub fn test_tokenized_with_spaces_null() {
+        let input = "   null";
+        let reader = buf_reader_from_str(input);
+
+        assert_eq!(Ok(JsonValue::NullValue), tokenized(reader));
+    }
+
+    #[test]
     pub fn test_tokenized_true() {
         let input = "true";
         let reader = buf_reader_from_str(input);
 
         assert_eq!(Ok(JsonValue::TrueValue), tokenized(reader));
-    }    
+    }
 
     #[test]
     pub fn test_tokenized_false() {

@@ -68,6 +68,20 @@ where
     }
 }
 
+fn read_until_not_space<R>(reader: &mut R) -> Result<char, TokenizedError>
+where
+    R: BufRead,
+{
+    let mut char = read_one_char(reader)?;
+    loop {
+        if char != ' ' {
+            break;
+        }
+        char = read_one_char(reader)?;
+    }
+    return Ok(char);
+}
+
 pub fn tokenized<R>(
     reader: &mut R,
     last_char: Option<char>,
@@ -168,12 +182,29 @@ where
                 };
                 println!("Token: {:?}", next_token.result);
                 result.push(next_token.result);
-                loop {
-                    if char != ' ' {
-                        break;
-                    }
-                    char = read_one_char(reader)?;
+                
+                let char = match  next_token.last_char_read {
+                    Some(' ') => read_until_not_space(reader),
+                    None => read_until_not_space(reader),
+                    Some(c) => Ok(c)
+                };
+                    
+                match char {
+                    Ok(',') => continue,
+                    Ok(']') => break,
+                    Ok(_) => return Err(TokenizedError::Invalid),
+                    Err(e) => return Err(e),
                 }
+                // loop {
+                //     println!("C: {:?}", char);
+                //     if char.is_some() && char.unwrap() == ',' {
+                //         break;
+                //     }
+                //     if char.is_some() && char.unwrap() != ' ' {
+                //         return Err(TokenizedError::Invalid);
+                //     }
+                //     char = Some(read_one_char(reader)?);
+                // }
             }
             Ok(TokenizedResult {
                 last_char_read: None,

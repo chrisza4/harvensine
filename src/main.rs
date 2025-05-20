@@ -5,7 +5,34 @@ mod generator;
 mod json;
 
 fn main() {
-    let p = Path::new("output/output");
-    let sum = generator::generate(p, 1_000_000);
-    println!("Expected sum: {}", sum.unwrap());
+    // let p = Path::new("output/output");
+    // let sum = generator::generate(p, 1_000_000);
+    // println!("Expected sum: {}", sum.unwrap());
+    match untyped_example() {
+        Ok(_) => (),
+        Err(e) => print!("Error {:?}", e)
+    }
+}
+
+use serde_json::{Result, Value};
+
+fn untyped_example() -> Result<()> {
+    // Some JSON input data as a &str. Maybe this comes from the user.
+    let data = r#"
+        {
+            "name": "\u000AJohn Doe",
+            "age": 43,
+            "phones": [
+                "+44 1234567",
+                "+44 2345678"
+            ]
+        }"#;
+
+    // Parse the string of data into serde_json::Value.
+    let v: Value = serde_json::from_str(data)?;
+
+    // Access parts of the data by indexing with square brackets.
+    println!("Please call {} at the number {}", v["name"], v["phones"][0]);
+
+    Ok(())
 }

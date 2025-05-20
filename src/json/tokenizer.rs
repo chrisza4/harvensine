@@ -80,7 +80,18 @@ where
             }
         },
         '"' => {
-            todo!()
+            let mut result = String::new();
+            loop {
+                let next_char = read_and_tokenized_char(&mut reader);
+                match next_char {
+                    Ok(c) => result.push(c),
+                    Err(TokenizedError::EndOfString) => {
+                        break;
+                    },
+                    Err(e) => return Err(e),
+                };
+            };
+            Ok(JsonValue::String(result))
         },
         _ => Err(TokenizedError::Invalid),
     }
@@ -180,7 +191,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore="Wait"]
     pub fn test_tokenized_string() {
         let input = "\"hello world\"";
         let reader = buf_reader_from_str(input);

@@ -52,16 +52,32 @@ macro_rules! tokenized {
 #[derive(PartialEq, Debug)]
 struct TokenizedResult {
     last_char_read: Option<char>,
-    result: JsonValue
+    result: JsonValue,
 }
 
-pub fn tokenized<R>(reader: &mut R, last_char: Option<char>) -> Result<TokenizedResult, TokenizedError>
+fn read_number<R>(reader: &mut R, result: &mut String) -> Result<char, TokenizedError>
+where
+    R: BufRead,
+{
+    loop {
+        let next_char = read_and_tokenized_char(reader)?;
+        if !is_char_in_number(&next_char) {
+            return Ok(next_char);
+        }
+        result.push(next_char);
+    }
+}
+
+pub fn tokenized<R>(
+    reader: &mut R,
+    last_char: Option<char>,
+) -> Result<TokenizedResult, TokenizedError>
 where
     R: BufRead,
 {
     let mut char = match last_char {
         Some(c) => c,
-        None => read_one_char(reader)?
+        None => read_one_char(reader)?,
     };
 
     loop {
@@ -80,7 +96,7 @@ where
             match str::from_utf8_mut(&mut buf) {
                 Ok(str) if str == "ull" => Ok(TokenizedResult {
                     last_char_read: None,
-                    result: JsonValue::NullValue
+                    result: JsonValue::NullValue,
                 }),
                 _ => Err(TokenizedError::Invalid),
             }
@@ -93,7 +109,7 @@ where
             match str::from_utf8_mut(&mut buf) {
                 Ok(str) if str == "rue" => Ok(TokenizedResult {
                     last_char_read: None,
-                    result: JsonValue::TrueValue
+                    result: JsonValue::TrueValue,
                 }),
                 _ => Err(TokenizedError::Invalid),
             }
@@ -106,7 +122,7 @@ where
             match str::from_utf8_mut(&mut buf) {
                 Ok(str) if str == "alse" => Ok(TokenizedResult {
                     last_char_read: None,
-                    result: JsonValue::FalseValue
+                    result: JsonValue::FalseValue,
                 }),
                 _ => Err(TokenizedError::Invalid),
             }
@@ -123,28 +139,21 @@ where
                     Err(e) => return Err(e),
                 };
             }
-            // Ok(JsonValue::String(result))
             Ok(TokenizedResult {
                 last_char_read: None,
-                result: JsonValue::String(result)
+                result: JsonValue::String(result),
             })
         }
         c if c.is_ascii_digit() || c == '-' => {
             let mut result = String::new();
             result.push(c);
-            loop {
-                let next_char = read_and_tokenized_char(reader)?;
-                if !is_char_in_number(&next_char) {
-                    break;
-                }
-                result.push(next_char);
-            }
-            // Parsing can be optimized
+
+            let last_char = read_number(reader, &mut result);
             let parsed_result: Result<f64, std::num::ParseFloatError> = result.parse();
             match parsed_result {
                 Ok(c) => Ok(TokenizedResult {
-                    last_char_read: None,
-                    result: JsonValue::Number(c)
+                    last_char_read: Some(last_char.unwrap()),
+                    result: JsonValue::Number(c),
                 }),
                 Err(_) => Err(TokenizedError::Invalid),
             }
@@ -159,13 +168,22 @@ where
                 };
                 println!("Token: {:?}", next_token.result);
                 result.push(next_token.result);
+                loop {
+                    if char != ' ' {
+                        break;
+                    }
+                    char = read_one_char(reader)?;
+                }
             }
             Ok(TokenizedResult {
                 last_char_read: None,
-                result:JsonValue::Array(result)
+                result: JsonValue::Array(result),
             })
         }
-        _ => Err(TokenizedError::Invalid),
+        c => {
+            println!("Invalid token: {:?}", c);
+            Err(TokenizedError::Invalid)
+        }
     }
 }
 
@@ -227,7 +245,10 @@ mod tests {
         let input = "null";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::NullValue, tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::NullValue,
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]
@@ -235,7 +256,10 @@ mod tests {
         let input = "   null";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::NullValue, tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::NullValue,
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]
@@ -243,7 +267,10 @@ mod tests {
         let input = "true";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::TrueValue, tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::TrueValue,
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]
@@ -251,7 +278,10 @@ mod tests {
         let input = "false";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::FalseValue, tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::FalseValue,
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]
@@ -259,13 +289,16 @@ mod tests {
         let input = "[1, 2, \"haha\", \"hoho\", true]";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::Array(vec![
-            JsonValue::Number(1.0),
-            JsonValue::Number(2.0),
-            JsonValue::String(String::from("haha")),
-            JsonValue::String(String::from("hoho")),
-            JsonValue::TrueValue
-        ]), tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::Array(vec![
+                JsonValue::Number(1.0),
+                JsonValue::Number(2.0),
+                JsonValue::String(String::from("haha")),
+                JsonValue::String(String::from("hoho")),
+                JsonValue::TrueValue
+            ]),
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]
@@ -292,7 +325,10 @@ mod tests {
         let input = "123451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::Number(123451.0), tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::Number(123451.0),
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]
@@ -300,7 +336,10 @@ mod tests {
         let input = "123.451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::Number(123.451), tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::Number(123.451),
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[rstest]
@@ -309,7 +348,10 @@ mod tests {
     pub fn test_tokenized_number_exponent(#[case] input: &str, #[case] expected: f64) {
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::Number(expected), tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::Number(expected),
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]
@@ -317,7 +359,10 @@ mod tests {
         let input = "-123.451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(JsonValue::Number(-123.451), tokenized!(&mut reader).unwrap().result);
+        assert_eq!(
+            JsonValue::Number(-123.451),
+            tokenized!(&mut reader).unwrap().result
+        );
     }
 
     #[test]

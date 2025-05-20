@@ -1,8 +1,4 @@
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::Path,
-};
+use std::{fs::File, io::Write, path::Path};
 
 use crate::calc::haversine;
 use rand::{Rng, SeedableRng};
@@ -21,6 +17,7 @@ struct Output {
     pairs: Vec<Pair>,
 }
 
+#[allow(dead_code)]
 pub fn generate(path: &Path, count: u32) -> Result<f64, std::io::Error> {
     // Generate 64 points
     let mut randomizer = rand::rngs::SmallRng::from_entropy();

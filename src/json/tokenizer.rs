@@ -1,11 +1,5 @@
 use core::str;
-use std::{fs::read, io::BufRead};
-
-pub enum JsonSign {
-    NoSign,
-    Plus,
-    Minus,
-}
+use std::io::BufRead;
 
 #[derive(PartialEq, Debug)]
 pub enum JsonValue {

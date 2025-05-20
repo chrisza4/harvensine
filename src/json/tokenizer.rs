@@ -20,6 +20,7 @@ pub enum JsonValue {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum TokenizedError {
+    InvalidChar,
     Invalid,
     EndOfString,
 }
@@ -47,7 +48,14 @@ macro_rules! tokenized {
         tokenized($a, None)
     };
 }
-pub fn tokenized<R>(reader: &mut R, last_char: Option<char>) -> Result<JsonValue, TokenizedError>
+
+#[derive(PartialEq, Debug)]
+struct TokenizedResult {
+    last_char_read: Option<char>,
+    result: JsonValue
+}
+
+pub fn tokenized<R>(reader: &mut R, last_char: Option<char>) -> Result<TokenizedResult, TokenizedError>
 where
     R: BufRead,
 {
@@ -70,7 +78,10 @@ where
                 return Err(TokenizedError::Invalid);
             };
             match str::from_utf8_mut(&mut buf) {
-                Ok(str) if str == "ull" => Ok(JsonValue::NullValue),
+                Ok(str) if str == "ull" => Ok(TokenizedResult {
+                    last_char_read: None,
+                    result: JsonValue::NullValue
+                }),
                 _ => Err(TokenizedError::Invalid),
             }
         }
@@ -80,7 +91,10 @@ where
                 return Err(TokenizedError::Invalid);
             };
             match str::from_utf8_mut(&mut buf) {
-                Ok(str) if str == "rue" => Ok(JsonValue::TrueValue),
+                Ok(str) if str == "rue" => Ok(TokenizedResult {
+                    last_char_read: None,
+                    result: JsonValue::TrueValue
+                }),
                 _ => Err(TokenizedError::Invalid),
             }
         }
@@ -90,7 +104,10 @@ where
                 return Err(TokenizedError::Invalid);
             };
             match str::from_utf8_mut(&mut buf) {
-                Ok(str) if str == "alse" => Ok(JsonValue::FalseValue),
+                Ok(str) if str == "alse" => Ok(TokenizedResult {
+                    last_char_read: None,
+                    result: JsonValue::FalseValue
+                }),
                 _ => Err(TokenizedError::Invalid),
             }
         }
@@ -106,7 +123,11 @@ where
                     Err(e) => return Err(e),
                 };
             }
-            Ok(JsonValue::String(result))
+            // Ok(JsonValue::String(result))
+            Ok(TokenizedResult {
+                last_char_read: None,
+                result: JsonValue::String(result)
+            })
         }
         c if c.is_ascii_digit() || c == '-' => {
             let mut result = String::new();
@@ -121,7 +142,10 @@ where
             // Parsing can be optimized
             let parsed_result: Result<f64, std::num::ParseFloatError> = result.parse();
             match parsed_result {
-                Ok(c) => Ok(JsonValue::Number(c)),
+                Ok(c) => Ok(TokenizedResult {
+                    last_char_read: None,
+                    result: JsonValue::Number(c)
+                }),
                 Err(_) => Err(TokenizedError::Invalid),
             }
         }
@@ -130,12 +154,16 @@ where
             loop {
                 let value = tokenized!(reader);
                 let Ok(next_token) = value else {
+                    println!("Val: {:?}", value);
                     break;
                 };
-                println!("Token: {:?}", next_token);
-                result.push(next_token);
+                println!("Token: {:?}", next_token.result);
+                result.push(next_token.result);
             }
-            Ok(JsonValue::Array(result))
+            Ok(TokenizedResult {
+                last_char_read: None,
+                result:JsonValue::Array(result)
+            })
         }
         _ => Err(TokenizedError::Invalid),
     }
@@ -167,17 +195,17 @@ where
                 return Err(TokenizedError::Invalid);
             };
             let Ok(unicode_hex_str) = str::from_utf8_mut(&mut buf) else {
-                return Err(TokenizedError::Invalid);
+                return Err(TokenizedError::InvalidChar);
             };
             let Ok(unicode_hex) = u32::from_str_radix(&unicode_hex_str, 16) else {
-                return Err(TokenizedError::Invalid);
+                return Err(TokenizedError::InvalidChar);
             };
             let Some(c) = char::from_u32(unicode_hex) else {
-                return Err(TokenizedError::Invalid);
+                return Err(TokenizedError::InvalidChar);
             };
             Ok(c)
         }
-        _ => Err(TokenizedError::Invalid),
+        _ => Err(TokenizedError::InvalidChar),
     }
 }
 
@@ -199,7 +227,7 @@ mod tests {
         let input = "null";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::NullValue), tokenized!(&mut reader));
+        assert_eq!(JsonValue::NullValue, tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -207,7 +235,7 @@ mod tests {
         let input = "   null";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::NullValue), tokenized!(&mut reader));
+        assert_eq!(JsonValue::NullValue, tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -215,7 +243,7 @@ mod tests {
         let input = "true";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::TrueValue), tokenized!(&mut reader));
+        assert_eq!(JsonValue::TrueValue, tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -223,7 +251,7 @@ mod tests {
         let input = "false";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::FalseValue), tokenized!(&mut reader));
+        assert_eq!(JsonValue::FalseValue, tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -231,13 +259,13 @@ mod tests {
         let input = "[1, 2, \"haha\", \"hoho\", true]";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Array(vec![
+        assert_eq!(JsonValue::Array(vec![
             JsonValue::Number(1.0),
             JsonValue::Number(2.0),
             JsonValue::String(String::from("haha")),
             JsonValue::String(String::from("hoho")),
             JsonValue::TrueValue
-        ])), tokenized!(&mut reader));
+        ]), tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -254,8 +282,8 @@ mod tests {
         let mut reader = buf_reader_from_str(input);
 
         assert_eq!(
-            Ok(JsonValue::String(String::from("hello world"))),
-            tokenized!(&mut reader)
+            JsonValue::String(String::from("hello world")),
+            tokenized!(&mut reader).unwrap().result
         );
     }
 
@@ -264,7 +292,7 @@ mod tests {
         let input = "123451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(123451.0)), tokenized!(&mut reader));
+        assert_eq!(JsonValue::Number(123451.0), tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -272,7 +300,7 @@ mod tests {
         let input = "123.451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(123.451)), tokenized!(&mut reader));
+        assert_eq!(JsonValue::Number(123.451), tokenized!(&mut reader).unwrap().result);
     }
 
     #[rstest]
@@ -281,7 +309,7 @@ mod tests {
     pub fn test_tokenized_number_exponent(#[case] input: &str, #[case] expected: f64) {
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(expected)), tokenized!(&mut reader));
+        assert_eq!(JsonValue::Number(expected), tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -289,7 +317,7 @@ mod tests {
         let input = "-123.451";
         let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::Number(-123.451)), tokenized!(&mut reader));
+        assert_eq!(JsonValue::Number(-123.451), tokenized!(&mut reader).unwrap().result);
     }
 
     #[test]
@@ -345,7 +373,7 @@ mod tests {
         let mut reader = buf_reader_from_str(input);
 
         assert_eq!(
-            Err(TokenizedError::Invalid),
+            Err(TokenizedError::InvalidChar),
             read_and_tokenized_char(&mut reader)
         );
     }

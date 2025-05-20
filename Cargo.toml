@@ -11,3 +11,5 @@ utf8-chars = "3.0.5"
 
 [dev-dependencies]
 rstest = "0.24.0"
+
+#![recursion_limit = "256"]

@@ -1,5 +1,5 @@
 use core::str;
-use std::io::BufRead;
+use std::{fs::read, io::BufRead};
 
 pub enum JsonSign {
     NoSign,
@@ -10,7 +10,7 @@ pub enum JsonSign {
 #[derive(PartialEq, Debug)]
 pub enum JsonValue {
     Object,
-    Array,
+    Array(Vec<JsonValue>),
     String(String),
     Number(f64),
     TrueValue,
@@ -24,7 +24,7 @@ pub enum TokenizedError {
     EndOfString,
 }
 
-fn read_one_char<R>(mut reader: R) -> Result<char, TokenizedError>
+fn read_one_char<R>(reader: &mut R) -> Result<char, TokenizedError>
 where
     R: BufRead,
 {
@@ -39,17 +39,17 @@ fn is_char_in_number(c: &char) -> bool {
     c.is_ascii_digit() || *c == '.' || *c == 'E' || *c == 'e'
 }
 
-pub fn tokenized<R>(mut reader: R) -> Result<JsonValue, TokenizedError>
+pub fn tokenized<R>(reader: &mut R) -> Result<JsonValue, TokenizedError>
 where
     R: BufRead,
 {
-    let mut char = read_one_char(&mut reader)?;
+    let mut char = read_one_char(reader)?;
 
     loop {
         if char != ' ' {
             break;
         }
-        char = read_one_char(&mut reader)?;
+        char = read_one_char(reader)?;
     }
 
     match char {
@@ -86,7 +86,7 @@ where
         '"' => {
             let mut result = String::new();
             loop {
-                let next_char = read_and_tokenized_char(&mut reader);
+                let next_char = read_and_tokenized_char(reader);
                 match next_char {
                     Ok(c) => result.push(c),
                     Err(TokenizedError::EndOfString) => {
@@ -101,7 +101,7 @@ where
             let mut result = String::new();
             result.push(c);
             loop {
-                let next_char = read_and_tokenized_char(&mut reader)?;
+                let next_char = read_and_tokenized_char(reader)?;
                 if !is_char_in_number(&next_char) {
                     break;
                 }
@@ -114,22 +114,34 @@ where
                 Err(_) => Err(TokenizedError::Invalid),
             }
         }
+        '[' => {
+            let mut result: Vec<JsonValue> = Vec::new();
+            loop {
+                let value = tokenized(reader);
+                let Ok(next_token) = value else {
+                    break;
+                };
+                result.push(next_token);
+            }
+            Err(TokenizedError::Invalid)
+            // Ok(JsonValue::Array(result))
+        }
         _ => Err(TokenizedError::Invalid),
     }
 }
 
-fn read_and_tokenized_char<R>(mut reader: R) -> Result<char, TokenizedError>
+fn read_and_tokenized_char<R>(reader: &mut R) -> Result<char, TokenizedError>
 where
     R: BufRead,
 {
-    let char = read_one_char(&mut reader)?;
+    let char = read_one_char(reader)?;
     if char == '\"' {
         return Err(TokenizedError::EndOfString);
     }
     if char != '\\' {
         return Ok(char);
     }
-    let next_char = read_one_char(&mut reader)?;
+    let next_char = read_one_char(reader)?;
     match next_char {
         '"' => Ok('"'),
         '\\' => Ok('\\'),
@@ -174,51 +186,64 @@ mod tests {
     #[test]
     pub fn test_tokenized_null() {
         let input = "null";
-        let reader = buf_reader_from_str(input);
+        let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::NullValue), tokenized(reader));
+        assert_eq!(Ok(JsonValue::NullValue), tokenized(&mut reader));
     }
 
     #[test]
     pub fn test_tokenized_with_spaces_null() {
         let input = "   null";
-        let reader = buf_reader_from_str(input);
+        let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::NullValue), tokenized(reader));
+        assert_eq!(Ok(JsonValue::NullValue), tokenized(&mut reader));
     }
 
     #[test]
     pub fn test_tokenized_true() {
         let input = "true";
-        let reader = buf_reader_from_str(input);
+        let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::TrueValue), tokenized(reader));
+        assert_eq!(Ok(JsonValue::TrueValue), tokenized(&mut reader));
     }
 
     #[test]
     pub fn test_tokenized_false() {
         let input = "false";
-        let reader = buf_reader_from_str(input);
+        let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Ok(JsonValue::FalseValue), tokenized(reader));
+        assert_eq!(Ok(JsonValue::FalseValue), tokenized(&mut reader));
+    }
+
+    #[test]
+    pub fn test_tokenized_array() {
+        let input = "[1, 2, \"haha\", true]";
+        let mut reader = buf_reader_from_str(input);
+
+        assert_eq!(Ok(JsonValue::Array(vec![
+            JsonValue::Number(1.0),
+            JsonValue::Number(2.0),
+            JsonValue::String(String::from("haha")),
+            JsonValue::TrueValue
+        ])), tokenized(&mut reader));
     }
 
     #[test]
     pub fn test_tokenized_err() {
         let input = "nxll";
-        let reader = buf_reader_from_str(input);
+        let mut reader = buf_reader_from_str(input);
 
-        assert_eq!(Err(TokenizedError::Invalid), tokenized(reader));
+        assert_eq!(Err(TokenizedError::Invalid), tokenized(&mut reader));
     }
 
     #[test]
     pub fn test_tokenized_string() {
         let input = "\"hello world\"";
-        let reader = buf_reader_from_str(input);
+        let mut reader = buf_reader_from_str(input);
 
         assert_eq!(
             Ok(JsonValue::String(String::from("hello world"))),
-            tokenized(reader)
+            tokenized(&mut reader)
         );
     }
 

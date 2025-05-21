@@ -1,8 +1,12 @@
+use repetition::print_time;
+
 mod calc;
 mod generator;
 mod json;
+mod repetition;
 
 fn main() {
+    print_time("test", 10.5, 1, 35);
     // let p = Path::new("output/output");
     // let sum = generator::generate(p, 1_000_000);
     // println!("Expected sum: {}", sum.unwrap());
@@ -10,11 +14,10 @@ fn main() {
     //     Ok(_) => (),
     //     Err(e) => print!("Error {:?}", e)
     // }
-    let mut b: i32 = 3;
-    test_mut_copy(&mut b);
-    println!("New b: {:?}", b);
+    // let mut b: i32 = 3;
+    // test_mut_copy(&mut b);
+    // println!("New b: {:?}", b);
 }
-
 
 fn test_mut_copy(b: &mut i32) -> i32 {
     *b += 5;

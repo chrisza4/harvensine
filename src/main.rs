@@ -1,4 +1,6 @@
-use repetition::print_time;
+use std::path::Path;
+
+use repetition::{print_time, read_cpu_timer};
 
 mod calc;
 mod generator;
@@ -6,10 +8,10 @@ mod json;
 mod repetition;
 
 fn main() {
-    print_time("test", 10.5, 1, 35);
-    // let p = Path::new("output/output");
-    // let sum = generator::generate(p, 1_000_000);
-    // println!("Expected sum: {}", sum.unwrap());
+    // print_time("test", 10.5, 1, 35);
+    let p = Path::new("output/output.json");
+    let sum = generator::generate(p, 1_000_000);
+    println!("Expected sum: {}", sum.unwrap());
     // match untyped_example() {
     //     Ok(_) => (),
     //     Err(e) => print!("Error {:?}", e)
@@ -44,3 +46,6 @@ fn test_mut_copy(b: &mut i32) -> i32 {
 
 //     Ok(())
 // }
+
+
+

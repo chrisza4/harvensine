@@ -1,5 +1,5 @@
+mod file_test;
 use mach::mach_time::mach_absolute_time;
-use mach::mach_time::mach_timebase_info;
 extern crate mach;
 
 #[derive(Default, Debug)]
@@ -56,7 +56,7 @@ pub fn print_time(label: &str, cpu_time: f64, cpu_timer_freq: u64, byte_count: u
     println!(); // add newline at the end like typical logging
 }
 
-fn read_cpu_timer() -> u64 {
+pub fn read_cpu_timer() -> u64 {
     unsafe { mach_absolute_time() }
 }
 
@@ -96,7 +96,11 @@ impl RepetitionTester {
         self.bytes_accumulated_on_this_test += byte_count;
     }
 
-    fn new_test_wave(target_processed_byte_count: u64, cpu_timer_freq: u64, seconds_to_try: u64) -> RepetitionTester {
+    fn new_test_wave(
+        target_processed_byte_count: u64,
+        cpu_timer_freq: u64,
+        seconds_to_try: u64,
+    ) -> RepetitionTester {
         RepetitionTester {
             mode: TestMode::Testing,
             target_processed_byte_count,
@@ -105,5 +109,9 @@ impl RepetitionTester {
             tests_started_at: read_cpu_timer(),
             ..Default::default()
         }
+    }
+
+    fn is_still_testing(self) -> bool {
+        (read_cpu_timer() - self.tests_started_at) > self.try_for_time
     }
 }

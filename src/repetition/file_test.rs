@@ -1,11 +1,11 @@
 use std::{fs::File, io::Read, os::unix::fs::MetadataExt};
 
-use super::{cpu::{self, estimate_cpu_timer_freq}, RepetitionTester};
+use super::RepetitionTester;
 
 pub fn file_read_test() {
     let mut file = File::open("output/data_10000.json").unwrap();
     let size = file.metadata().unwrap().size();
-    
+
     let mut tester = RepetitionTester::new_test_wave(size, 10);
     while tester.is_still_testing() {
         tester.begin_time();
@@ -14,5 +14,5 @@ pub fn file_read_test() {
         tester.end_time();
         tester.count_bytes(size);
     }
-    tester.print_results(estimate_cpu_timer_freq());
+    tester.print_results();
 }

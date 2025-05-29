@@ -1,4 +1,3 @@
-mod cpu;
 pub mod file_test;
 use std::mem;
 
@@ -83,7 +82,7 @@ pub fn print_time(label: &str, cpu_time: u64, cpu_timer: &CpuTimer, byte_count: 
 }
 
 impl RepetitionTester {
-    fn print_results(&self, cpu_timer_freq: u64) {
+    fn print_results(&self) {
         let byte_count = self.bytes_accumulated_on_this_test;
         print_time("Min", self.results.min_time, &self.cpu_timer, byte_count);
         print_time("Max", self.results.max_time, &self.cpu_timer, byte_count);

@@ -73,7 +73,7 @@ pub fn print_time(label: &str, cpu_time: u64, cpu_timer: &CpuTimer, byte_count: 
 
     let milliseconds = cpu_timer.nano_seconds_from_cpu_time(cpu_time) / 1_000_000.0;
     to_print.push_str(&format!(" ({:.3}ms)", milliseconds));
-    let seconds = milliseconds * 1000.0;
+    let seconds = milliseconds / 1000.0;
 
     if byte_count != 0 {
         let gigabyte = 1024.0 * 1024.0 * 1024.0;
@@ -95,7 +95,7 @@ impl RepetitionTester {
             &self.cpu_timer,
             byte_count,
         );
-        print!("\r");
+        print!("            \r");
     }
 
     fn begin_time(&mut self) {

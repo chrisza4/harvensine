@@ -1,5 +1,11 @@
-mod file_test;
-use mach::mach_time::mach_absolute_time;
+mod cpu;
+pub mod file_test;
+use std::mem;
+
+use mach::{
+    kern_return::KERN_SUCCESS,
+    mach_time::{mach_absolute_time, mach_timebase_info},
+};
 extern crate mach;
 
 #[derive(Default, Debug)]
@@ -19,11 +25,38 @@ pub struct RepetitionTestResults {
 }
 
 #[derive(Default, Debug)]
+pub struct CpuTimer {
+    timebase_info: mach_timebase_info,
+}
+
+impl CpuTimer {
+    pub fn new() -> CpuTimer {
+        unsafe {
+            let mut timebase_info = mem::zeroed();
+            let result = mach_timebase_info(&mut timebase_info);
+            if result != KERN_SUCCESS {
+                panic!("Cannot get timebase info from CPU")
+            }
+            CpuTimer { timebase_info }
+        }
+    }
+    pub fn nano_seconds_from_cpu_time(&self, elapsed_tick: u64) -> f64 {
+        let numer = self.timebase_info.numer as f64;
+        let denom = self.timebase_info.denom as f64;
+        (elapsed_tick as f64) * (numer / denom)
+    }
+}
+
+pub fn read_cpu_timer() -> u64 {
+    unsafe { mach_absolute_time() }
+}
+
+#[derive(Default, Debug)]
 pub struct RepetitionTester {
-    target_processed_byte_count: u64,
-    cpu_timer_freq: u64,
     try_for_time: u64,
     tests_started_at: u64,
+    target_processed_byte_count: u64,
+    cpu_timer: CpuTimer,
 
     mode: TestMode,
     print_new_minimums: bool,
@@ -35,49 +68,29 @@ pub struct RepetitionTester {
     results: RepetitionTestResults,
 }
 
-pub fn seconds_from_cpu_time(cpu_time: f64, cpu_timer_freq: u64) -> f64 {
-    cpu_time / cpu_timer_freq as f64
-}
-
-pub fn print_time(label: &str, cpu_time: f64, cpu_timer_freq: u64, byte_count: u64) {
+pub fn print_time(label: &str, cpu_time: u64, cpu_timer: &CpuTimer, byte_count: u64) {
     print!("{label}: {:.0}", cpu_time);
 
-    if cpu_timer_freq != 0 {
-        let seconds = seconds_from_cpu_time(cpu_time, cpu_timer_freq);
-        print!(" ({:.3}ms)", 1000.0 * seconds);
+    let milliseconds = cpu_timer.nano_seconds_from_cpu_time(cpu_time) / 1_000_000.0;
+    print!(" ({:.3}ms)", milliseconds);
+    let seconds = milliseconds * 1000.0;
 
-        if byte_count != 0 {
-            let gigabyte = 1024.0 * 1024.0 * 1024.0;
-            let best_bandwidth = byte_count as f64 / (gigabyte * seconds);
-            print!(" {:.3}gb/s", best_bandwidth);
-        }
+    if byte_count != 0 {
+        let gigabyte = 1024.0 * 1024.0 * 1024.0;
+        let best_bandwidth = byte_count as f64 / (gigabyte * seconds);
+        print!(" {:.3}gb/s", best_bandwidth);
     }
-
-    println!(); // add newline at the end like typical logging
-}
-
-pub fn read_cpu_timer() -> u64 {
-    unsafe { mach_absolute_time() }
 }
 
 impl RepetitionTester {
-    fn print_results(self, cpu_timer_freq: u64, byte_count: u64) {
-        print_time(
-            "Min",
-            self.results.min_time as f64,
-            cpu_timer_freq,
-            byte_count,
-        );
-        print_time(
-            "Max",
-            self.results.max_time as f64,
-            cpu_timer_freq,
-            byte_count,
-        );
+    fn print_results(&self, cpu_timer_freq: u64) {
+        let byte_count = self.bytes_accumulated_on_this_test;
+        print_time("Min", self.results.min_time, &self.cpu_timer, byte_count);
+        print_time("Max", self.results.max_time, &self.cpu_timer, byte_count);
         print_time(
             "Avg",
-            (self.results.total_time / self.results.test_count) as f64,
-            cpu_timer_freq,
+            self.results.total_time / self.results.test_count,
+            &self.cpu_timer,
             byte_count,
         );
     }
@@ -96,22 +109,20 @@ impl RepetitionTester {
         self.bytes_accumulated_on_this_test += byte_count;
     }
 
-    fn new_test_wave(
-        target_processed_byte_count: u64,
-        cpu_timer_freq: u64,
-        seconds_to_try: u64,
-    ) -> RepetitionTester {
+    fn new_test_wave(target_processed_byte_count: u64, seconds_to_try: u64) -> RepetitionTester {
         RepetitionTester {
             mode: TestMode::Testing,
             target_processed_byte_count,
-            cpu_timer_freq,
-            try_for_time: seconds_to_try * cpu_timer_freq,
+            cpu_timer: CpuTimer::new(),
+            try_for_time: seconds_to_try,
             tests_started_at: read_cpu_timer(),
             ..Default::default()
         }
     }
 
-    fn is_still_testing(self) -> bool {
-        (read_cpu_timer() - self.tests_started_at) > self.try_for_time
+    fn is_still_testing(&self) -> bool {
+        self.cpu_timer
+            .nano_seconds_from_cpu_time(read_cpu_timer() - self.tests_started_at)
+            > self.try_for_time as f64 * 1_000_000_000.0
     }
 }

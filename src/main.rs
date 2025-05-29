@@ -1,6 +1,5 @@
-use std::path::Path;
 
-use repetition::{file_test::file_read_test, print_time, read_cpu_timer};
+use repetition::file_test::file_read_test;
 
 mod calc;
 mod generator;

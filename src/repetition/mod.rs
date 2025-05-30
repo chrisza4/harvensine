@@ -12,8 +12,6 @@ enum TestMode {
     #[default]
     Uninitialized,
     Testing,
-    Completed,
-    Error,
 }
 #[derive(Default, Debug)]
 pub struct RepetitionTestResults {
@@ -50,6 +48,7 @@ pub fn read_cpu_timer() -> u64 {
     unsafe { mach_absolute_time() }
 }
 
+#[allow(dead_code)]
 #[derive(Default, Debug)]
 pub struct RepetitionTester {
     try_for_time: u64,
